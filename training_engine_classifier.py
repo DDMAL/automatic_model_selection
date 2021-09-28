@@ -35,8 +35,9 @@ class FileSelectionMode(Enum):
 
 class SampleExtractionMode(Enum):
     RANDOM,     \
-    SEQUENTIAL  \
-    = range(2)
+    SEQUENTIAL, \
+    RESIZING    \
+    = range(3)
 
     def __str__(self):
         return self.name
@@ -103,35 +104,40 @@ def get_domain_classifier(num_domains, height, width, pretrained_weights=None):
     mask = Masking(mask_value=kPIXEL_VALUE_FOR_MASKING)(inputs)
 
     conv1 = Conv2D(
-        ff, 3, activation="relu", padding="same", kernel_initializer="he_normal"
+        ff, 5, activation="relu", padding="same", kernel_initializer="he_normal"
     )(mask)
-    conv1 = Conv2D(
-        ff, 3, activation="relu", padding="same", kernel_initializer="he_normal"
-    )(conv1)
+    #conv1 = Conv2D(
+    #    ff, 5, activation="relu", padding="same", kernel_initializer="he_normal"
+    #)(conv1)
     pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
+    pool1 = Dropout(0.2)(pool1)
+
     conv2 = Conv2D(
-        ff * 2, 3, activation="relu", padding="same", kernel_initializer="he_normal"
+        ff * 2, 5, activation="relu", padding="same", kernel_initializer="he_normal"
     )(pool1)
-    conv2 = Conv2D(
-        ff * 2, 3, activation="relu", padding="same", kernel_initializer="he_normal"
-    )(conv2)
+    #conv2 = Conv2D(
+    #    ff * 2, 5, activation="relu", padding="same", kernel_initializer="he_normal"
+    #)(conv2)
     pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
+    pool2 = Dropout(0.2)(pool2)
 
     conv3 = Conv2D(
-        ff * 8, 3, activation="relu", padding="same", kernel_initializer="he_normal"
+        ff * 4, 5, activation="relu", padding="same", kernel_initializer="he_normal"
     )(pool2)
-    conv4 = Conv2D(
-        ff * 8, 3, activation="relu", padding="same", kernel_initializer="he_normal"
-    )(conv3)
+    #conv3 = Conv2D(
+    #    ff * 4, 5, activation="relu", padding="same", kernel_initializer="he_normal"
+    #)(conv3)
+    pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
+    pool3 = Dropout(0.2)(pool3)
 
-    flatten = tf.keras.layers.Flatten() (conv4)
-    dense1 = Dense(16, activation="softmax")(flatten)
+    flatten = tf.keras.layers.Flatten() (pool3)
+    dense1 = Dense(64, activation="relu")(flatten)
     dense2 = Dense(num_domains, activation="softmax")(dense1)
 
     model = Model(inputs=inputs, outputs=dense2)
 
     model.compile(
-        optimizer=Adam(lr=1e-4), loss="binary_crossentropy", metrics=["accuracy"]
+        optimizer=Adam(lr=1e-4), loss="categorical_crossentropy", metrics=["accuracy"]
     )
 
     if pretrained_weights is not None:
@@ -181,7 +187,7 @@ def get_image_with_gt(inputs, image_paths, labels, region_paths, backgrounds_pat
             "input images: " + str(number_of_training_pages) + " index acceded: " + str(idx_file)
         )
 
-    gr = (255. - cv2.imread(image_paths[idx_file], cv2.IMREAD_COLOR)) / 255.  # 3-channel
+    gr = (cv2.imread(image_paths[idx_file], cv2.IMREAD_COLOR)) / 255.  # 3-channel
     gt = labels[idx_file]
 
     return gr, gt
@@ -239,6 +245,39 @@ def extractRandomSamples(inputs, image_paths, labels, region_paths, backgrounds_
 def get_stride(patch_height, patch_width):
     return patch_height // 2, patch_width // 2
 
+def resizeImage(img, height, width, interpolation = cv2.INTER_LINEAR):
+    img2 = img.copy()
+    return cv2.resize(img2,(width,height), interpolation=interpolation)
+
+#@threadsafe_generator  # Credit: https://anandology.com/blog/using-iterators-and-generators/
+def createGeneratorResizingImages(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size):
+    hstride, wstride = get_stride(patch_height, patch_width)
+    
+    gr_chunks = []
+    gt_chunks = []
+
+    count = 0
+    number_of_training_pages = len(image_paths)
+
+    while (True):
+        idx_file = np.random.randint(number_of_training_pages)
+        gr, gt = get_image_with_gt(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file)
+        gr = resizeImage(gr, patch_height, patch_width)
+
+        gr_chunks.append(gr)
+        gt_chunks.append(gt)
+
+        count +=1
+        if count % batch_size == 0:
+            gr_chunks_arr = np.array(gr_chunks)
+            gt_chunks_arr = np.array(gt_chunks)
+            # convert gr_chunks and gt_chunks to the numpy arrays that are yield below
+
+            return gr_chunks_arr, gt_chunks_arr  # convert into npy before yielding
+            gr_chunks = []
+            gt_chunks = []
+            count = 0
+                
 @threadsafe_generator  # Credit: https://anandology.com/blog/using-iterators-and-generators/
 def createGeneratorSequentialExtraction(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size):
     
@@ -277,6 +316,8 @@ def createGeneratorDefault(inputs, image_paths, labels, region_paths, background
                 yield extractRandomSamples(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size, sample_extraction_mode)
             elif sample_extraction_mode == SampleExtractionMode.SEQUENTIAL:
                 yield createGeneratorSequentialExtraction(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size)
+            elif sample_extraction_mode == SampleExtractionMode.RESIZING:
+                yield createGeneratorResizingImages(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size)
             else:
                 raise Exception(
                     'The sample extraction mode does not exist.\n'
@@ -299,6 +340,8 @@ def createGeneratorShuffle(inputs, image_paths, labels, region_paths, background
                 yield extractRandomSamples(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size, sample_extraction_mode)
             elif sample_extraction_mode == SampleExtractionMode.SEQUENTIAL:
                 yield createGeneratorSequentialExtraction(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size)
+            elif sample_extraction_mode == SampleExtractionMode.RESIZING:
+                yield createGeneratorResizingImages(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size)
             else:
                 raise Exception(
                     'The sample extraction mode does not exist.\n'
@@ -316,6 +359,8 @@ def createGeneratorRandom(inputs, image_paths, labels, region_paths, backgrounds
             yield extractRandomSamples(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size, sample_extraction_mode)
         elif sample_extraction_mode == SampleExtractionMode.SEQUENTIAL:
             yield createGeneratorSequentialExtraction(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size)
+        elif sample_extraction_mode == SampleExtractionMode.RESIZING:
+            yield createGeneratorResizingImages(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size)
         else:
             raise Exception(
                 'The sample extraction mode does not exist.\n'
@@ -379,6 +424,10 @@ def get_steps_per_epoch(inputs, number_samples_per_class, patch_height, patch_wi
         return number_samples_per_class // batch_size
     elif sample_extraction_mode == SampleExtractionMode.SEQUENTIAL:
         return get_number_samples_sequential(inputs, patch_height, patch_width)
+    elif sample_extraction_mode == SampleExtractionMode.RESIZING:
+        image_paths = [img_path for dict_imgs_folder in inputs[KEY_IMAGES] for img_path in dict_imgs_folder[KEY_RESOURCE_PATH]]
+        #return len(image_paths) // batch_size
+        return number_samples_per_class // batch_size
     else:
         raise Exception(
             'The sample extraction mode does not exist.\n'
@@ -402,7 +451,7 @@ def train_domain_classifier(
     # Create ground_truth
     print("Creating data generators...")
     generators = getTrain(inputs, num_domains, height, width, batch_size, file_selection_mode, sample_extraction_mode)
-    generators_validation = getTrain(inputs, num_domains, height, width, batch_size, FileSelectionMode.DEFAULT, SampleExtractionMode.RANDOM)
+    generators_validation = getTrain(inputs, num_domains, height, width, batch_size, FileSelectionMode.DEFAULT, SampleExtractionMode.RESIZING)
 
     # Training loop
     for label in range(num_domains):
