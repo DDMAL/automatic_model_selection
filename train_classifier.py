@@ -1,17 +1,8 @@
-"""Local Fast Trainer
-This is the file for running Calvo Fast Trainer loaclly. Make sure
-to have an 'Images' folder with the correct inputs in the same directory.
-If not, you can change the values in 'inputs' and 'outputs'.
+"""Train classifier
+This is the file for training a neural domain classifier. 
 
-Simply run `python local_fast_trainer.py` to see the output.
-This will call `training_engine_sae.py`.
-
-It should generate 3 files in its current state. A background model,
-a Model 0, and a Log File.
-
-If you're running it in a Rodan container, this will be located in code/Rodan/rodan/jobs/Calvo_classifier
-If the container is already running, try `docker exec -it [container_name] bash` to run the script without
-stopping.
+Simply run `python train_classifier.py` with the respective parameters.
+This will call `training_engine_classifier.py`.
 """
 
 import logging
