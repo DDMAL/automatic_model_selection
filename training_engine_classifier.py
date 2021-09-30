@@ -71,6 +71,7 @@ KEY_BACKGROUND_LAYER = "rgba PNG - Layer 0 (Background)"
 KEY_SELECTED_REGIONS = "rgba PNG - Selected regions"
 KEY_RESOURCE_PATH = "resource_path"
 KEY_IMAGES = "Image"
+KEY_VALIDATION_RATIO = "Val"
 # ===========================
 
 class threadsafe_iter:
@@ -369,14 +370,22 @@ def createGeneratorRandom(inputs, image_paths, labels, region_paths, backgrounds
 
 
 @threadsafe_generator  # Credit: https://anandology.com/blog/using-iterators-and-generators/
-def createGenerator(inputs, patch_height, patch_width, batch_size, file_selection_mode, sample_extraction_mode):
+def createGenerator(inputs, patch_height, patch_width, batch_size, file_selection_mode, sample_extraction_mode, is_training, val_ratio):
     
     num_domains = len(inputs[KEY_IMAGES])
     
-    image_paths = [img_path for dict_imgs_folder in inputs[KEY_IMAGES] for img_path in dict_imgs_folder[KEY_RESOURCE_PATH]]
-    region_paths = [img_path for dict_imgs_folder in inputs[KEY_SELECTED_REGIONS] for img_path in dict_imgs_folder[KEY_RESOURCE_PATH]]
-    backgrounds_paths = [img_path for dict_imgs_folder in inputs[KEY_BACKGROUND_LAYER] for img_path in dict_imgs_folder[KEY_RESOURCE_PATH]]
-    labels = [idx_folder for idx_folder in range(len(inputs[KEY_IMAGES])) for img_path in inputs[KEY_IMAGES][idx_folder][KEY_RESOURCE_PATH]]
+    if is_training: #For training
+        image_paths = [img_path for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_IMAGES]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image >= int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
+        region_paths = [img_path for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_SELECTED_REGIONS]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image >= int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
+        backgrounds_paths = [img_path for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_BACKGROUND_LAYER]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image >= int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
+        labels = [idx_dataset for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_BACKGROUND_LAYER]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image >= int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
+
+    else: #For validation
+        image_paths = [img_path for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_IMAGES]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image < int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
+        region_paths = [img_path for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_SELECTED_REGIONS]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image < int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
+        backgrounds_paths = [img_path for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_BACKGROUND_LAYER]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image < int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
+        labels = [idx_dataset for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_BACKGROUND_LAYER]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image < int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
+
     labels = np.eye(num_domains)[labels]
     
     if file_selection_mode == FileSelectionMode.DEFAULT:
@@ -392,19 +401,13 @@ def createGenerator(inputs, patch_height, patch_width, batch_size, file_selectio
 
 
 
-def getTrain(inputs, num_labels, patch_height, patch_width, batch_size, file_selection_mode, sample_extraction_mode):
-    generator_labels = []
+def getTrain(inputs, num_labels, patch_height, patch_width, batch_size, file_selection_mode, sample_extraction_mode, is_training, val_ratio = 0.):
+    generator_label = createGenerator(
+        inputs, patch_height, patch_width, batch_size, file_selection_mode, sample_extraction_mode, is_training, val_ratio
+    )
+    print(generator_label)
 
-    print("num_labels", num_labels)
-    for idx_label in range(num_labels):
-        print("idx_label", idx_label)
-        generator_label = createGenerator(
-            inputs, patch_height, patch_width, batch_size, file_selection_mode, sample_extraction_mode
-        )
-        generator_labels.append(generator_label)
-        print(generator_labels)
-
-    return generator_labels
+    return generator_label
 
 
 
@@ -449,39 +452,38 @@ def train_domain_classifier(
 ):
 
     # Create ground_truth
-    print("Creating data generators...")
-    generators = getTrain(inputs, num_domains, height, width, batch_size, file_selection_mode, sample_extraction_mode)
-    generators_validation = getTrain(inputs, num_domains, height, width, batch_size, FileSelectionMode.DEFAULT, SampleExtractionMode.RESIZING)
+    print("Creating data generators (training and validation)...")
+    generator = getTrain(inputs, num_domains, height, width, batch_size, file_selection_mode, sample_extraction_mode, True, inputs[KEY_VALIDATION_RATIO])
+    generator_validation = getTrain(inputs, num_domains, height, width, batch_size, FileSelectionMode.DEFAULT, SampleExtractionMode.RESIZING, False, inputs[KEY_VALIDATION_RATIO])
 
-    # Training loop
-    for label in range(num_domains):
-        print("Training a new model for label #{}".format(str(label)))
-        model = get_domain_classifier(num_domains=len(inputs[KEY_IMAGES]), height=height, width=width)
-        # model.summary()
+    
+    print("Training a new domain classification model")
+    model = get_domain_classifier(num_domains=len(inputs[KEY_IMAGES]), height=height, width=width)
+    # model.summary()
 
-        callbacks_list = [
-            ModelCheckpoint(
-                output_path[label],
-                save_best_only=True,
-                monitor="val_accuracy",
-                verbose=1,
-                mode="max",
-            ),
-            EarlyStopping(monitor="val_accuracy", patience=3, verbose=0, mode="max"),
-        ]
+    callbacks_list = [
+        ModelCheckpoint(
+            output_path,
+            save_best_only=True,
+            monitor="val_accuracy",
+            verbose=1,
+            mode="max",
+        ),
+        EarlyStopping(monitor="val_accuracy", patience=3, verbose=0, mode="max"),
+    ]
 
-        steps_per_epoch = get_steps_per_epoch(inputs, number_samples_per_class, height, width, batch_size, sample_extraction_mode)
+    steps_per_epoch = get_steps_per_epoch(inputs, number_samples_per_class, height, width, batch_size, sample_extraction_mode)
 
-        # Training stage
-        model.fit(
-            generators[label],
-            verbose=2,
-            steps_per_epoch=steps_per_epoch,
-            validation_data=generators_validation[label],
-            validation_steps=100,
-            callbacks=callbacks_list,
-            epochs=epochs,
-        )
+    # Training stage
+    model.fit(
+        generator,
+        verbose=2,
+        steps_per_epoch=steps_per_epoch,
+        validation_data=generator_validation,
+        validation_steps=100,
+        callbacks=callbacks_list,
+        epochs=epochs,
+    )
 
     return 0
 

@@ -33,6 +33,8 @@ KEY_SELECTED_REGIONS = "rgba PNG - Selected regions"
 KEY_RESOURCE_PATH = "resource_path"
 KEY_LAYERS = "layers"
 KEY_IMAGES = "Image"
+KEY_VALIDATION_RATIO = "Val"
+
 
 kPATH_IMAGES_DEFAULT = ["datasets/MS73/images"]
 kPATH_REGION_MASKS_DEFAULT = ["datasets/MS73/regions"]
@@ -46,6 +48,7 @@ kMAX_NUMBER_OF_EPOCHS_DEFAULT = 50
 kNUMBER_SAMPLES_PER_CLASS_DEFAULT = 1000
 kFILE_SELECTION_MODE_DEFAULT = training.FileSelectionMode.SHUFFLE
 kSAMPLE_EXTRACTION_MODE_DEFAULT = training.SampleExtractionMode.RESIZING
+kVALIDATION_RATIO_DEFAULT = 0.2
 # ===========================
 
 
@@ -83,8 +86,8 @@ def menu():
     parser.add_argument(
                     '-out',
                     dest='path_out', 
-                    help='Paths for the models saved after the training.', 
-                    action='append'
+                    help='Paths for the models saved after the training.',
+                    default=kPATH_OUTPUT_MODELS_DEFAULT
                     )
 
     parser.add_argument(
@@ -145,13 +148,20 @@ def menu():
                     help='Mode of extracing samples for each image in the training process'
                     )
 
+    parser.add_argument(
+                    '-val',
+                    default=kVALIDATION_RATIO_DEFAULT,
+                    dest='validation_ratio',
+                    type=float,
+                    help='Ratio of validation images used for training the models'
+                    )
+
     args = parser.parse_args()
 
     args.path_src = args.path_src if args.path_src is not None else kPATH_IMAGES_DEFAULT
     args.path_regions = args.path_regions if args.path_regions is not None else kPATH_REGION_MASKS_DEFAULT
     args.path_bg = args.path_bg if args.path_bg is not None else kPATH_BACKGROUND_DEFAULT
     args.path_layer = args.path_layer if args.path_layer is not None else kPATH_LAYERS_DEFAULT
-    args.path_out = args.path_out if args.path_out is not None else kPATH_OUTPUT_MODELS_DEFAULT
     
     print('CONFIG:\n -', str(args).replace('Namespace(','').replace(')','').replace(', ', '\n - '))
 
@@ -180,6 +190,7 @@ def init_input_dictionary(config):
     inputs[KEY_BACKGROUND_LAYER] = []
     inputs[KEY_SELECTED_REGIONS] = []
     inputs[KEY_LAYERS] = []
+    inputs[KEY_VALIDATION_RATIO] = config.validation_ratio
     list_src_files = list_files_per_path(config.path_src)
 
 
@@ -212,16 +223,6 @@ def init_input_dictionary(config):
     
     return inputs
 
-#Initialize the dictionary with the outputs
-def init_output_dictionary(config):
-    outputs = []
-
-    for path_model in config.path_out:
-        outputs.append(path_model)
-
-    return outputs
-
-
 #########################################################################
 
 config = menu()
@@ -229,7 +230,7 @@ config = menu()
 # Fail if arbitrary layers are not equal before training occurs.
 
 inputs = init_input_dictionary(config)
-outputs = init_output_dictionary(config)
+outputs = config.path_out
 
 print(json.dumps(inputs, indent=2))
 print(json.dumps(outputs, indent=2))
