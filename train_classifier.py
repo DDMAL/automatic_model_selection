@@ -27,11 +27,9 @@ KEY_IMAGES = "Image"
 KEY_VALIDATION_RATIO = "Val"
 
 
-kPATH_IMAGES_DEFAULT = ["datasets/MS73/images"]
-kPATH_REGION_MASKS_DEFAULT = ["datasets/MS73/regions"]
-kPATH_BACKGROUND_DEFAULT = ["datasets/MS73/layers/background"]
-kPATH_LAYERS_DEFAULT = ["datasets/MS73/layers/staff", "datasets/MS73/layers/neumes"]
-kPATH_OUTPUT_MODELS_DEFAULT = ["Models/MS73/model_background.hdf5", "Models/MS73/model_staff_dom_class.hdf5", "Models/MS73/model_neumes_dom_class.hdf5"]
+kPATH_IMAGES_DEFAULT = ["datasets/experiments/MS73/training/images", "datasets/experiments/b-59-850/training/images"]
+kPATH_REGION_MASKS_DEFAULT = ["datasets/experiments/MS73/training/regions", "datasets/experiments/b-59-850/training/regions"]
+kPATH_OUTPUT_MODEL_DEFAULT = "Models/DomClass/MS73_cap.hdf5"
 kBATCH_SIZE_DEFAULT = 8
 kPATCH_HEIGHT_DEFAULT = 256
 kPATCH_WIDTH_DEFAULT = 256
@@ -61,24 +59,10 @@ def menu():
                     )
 
     parser.add_argument(
-                    '-pbg',  
-                    dest='path_bg', 
-                    help='Path of the folder with the background layer data.',
-                    action='append'
-                    )
-
-    parser.add_argument(
-                    '-pgt',
-                    dest='path_layer', 
-                    help='Paths of the ground-truth folders to be considered (one per layer).', 
-                    action='append'
-                    )
-    
-    parser.add_argument(
                     '-out',
                     dest='path_out', 
                     help='Paths for the models saved after the training.',
-                    default=kPATH_OUTPUT_MODELS_DEFAULT
+                    default=kPATH_OUTPUT_MODEL_DEFAULT
                     )
 
     parser.add_argument(
@@ -151,8 +135,6 @@ def menu():
 
     args.path_src = args.path_src if args.path_src is not None else kPATH_IMAGES_DEFAULT
     args.path_regions = args.path_regions if args.path_regions is not None else kPATH_REGION_MASKS_DEFAULT
-    args.path_bg = args.path_bg if args.path_bg is not None else kPATH_BACKGROUND_DEFAULT
-    args.path_layer = args.path_layer if args.path_layer is not None else kPATH_LAYERS_DEFAULT
     
     print('CONFIG:\n -', str(args).replace('Namespace(','').replace(')','').replace(', ', '\n - '))
 
@@ -188,7 +170,6 @@ def init_input_dictionary(config):
     for idx_folder in range(len(list_src_files)):
 
         path_imgs = list_src_files[idx_folder]
-        parent_path_bg = config.path_bg[idx_folder]
         parent_path_regions = config.path_regions[idx_folder]
 
         print (path_imgs)
@@ -196,22 +177,11 @@ def init_input_dictionary(config):
         dict_img[KEY_RESOURCE_PATH] = path_imgs
         inputs[KEY_IMAGES].append(dict_img)
 
-        path_bgs = [ os.path.join(parent_path_bg, os.path.basename(path_imgs_i)) for path_imgs_i in path_imgs]
-        dict_img = {}
-        dict_img[KEY_RESOURCE_PATH] = path_bgs
-        inputs[KEY_BACKGROUND_LAYER].append(dict_img)
-
         path_regions = [ os.path.join(parent_path_regions, os.path.splitext(os.path.basename(path_imgs_i))[0] + ".png") for path_imgs_i in path_imgs]
         dict_img = {}
         dict_img[KEY_RESOURCE_PATH] = path_regions
         inputs[KEY_SELECTED_REGIONS].append(dict_img)
         
-        for path_layer in config.path_layer:
-            path_layers = [ os.path.join(path_layer, os.path.basename(path_imgs_i)) for path_imgs_i in path_imgs]
-            dict_img = {}
-            dict_img[KEY_RESOURCE_PATH] = path_layers
-            inputs[KEY_LAYERS].append(dict_img)
-    
     return inputs
 
 #########################################################################

@@ -67,7 +67,6 @@ VALIDATION_SPLIT = 0.2
 # ===========================
 #       CONSTANTS
 # ===========================
-KEY_BACKGROUND_LAYER = "rgba PNG - Layer 0 (Background)"
 KEY_SELECTED_REGIONS = "rgba PNG - Selected regions"
 KEY_RESOURCE_PATH = "resource_path"
 KEY_IMAGES = "Image"
@@ -177,7 +176,7 @@ def load_gt_image(path_file, regions_mask=None):
         return bg_mask
 
 
-def get_image_with_gt(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file):
+def get_image_with_gt(inputs, image_paths, labels, region_paths, idx_file):
 
     # Required input ports
     # TODO assert that all layers have the same number of inputs (otherwise it will crack afterwards)
@@ -202,8 +201,8 @@ def appendNewSample(gr, gt, row, col, patch_height, patch_width, gr_chunks, gt_c
 
 
 
-def createGeneratorSingleFileSequentialExtraction(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, row, col, patch_height, patch_width, batch_size):
-    gr, gt = get_image_with_gt(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file)
+def createGeneratorSingleFileSequentialExtraction(inputs, image_paths, labels, region_paths, idx_file, row, col, patch_height, patch_width, batch_size):
+    gr, gt = get_image_with_gt(inputs, image_paths, labels, region_paths, idx_file)
 
     gr_chunks = []
     gt_chunks = []
@@ -225,8 +224,8 @@ def createGeneratorSingleFileSequentialExtraction(inputs, image_paths, labels, r
 
 
 
-def extractRandomSamples(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size, sample_extraction_mode):
-    gr, gt = get_image_with_gt(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file)
+def extractRandomSamples(inputs, image_paths, labels, region_paths, idx_file, patch_height, patch_width, batch_size, sample_extraction_mode):
+    gr, gt = get_image_with_gt(inputs, image_paths, labels, region_paths, idx_file)
 
     gr_chunks = []
     gt_chunks = []
@@ -251,7 +250,7 @@ def resizeImage(img, height, width, interpolation = cv2.INTER_LINEAR):
     return cv2.resize(img2,(width,height), interpolation=interpolation)
 
 #@threadsafe_generator  # Credit: https://anandology.com/blog/using-iterators-and-generators/
-def createGeneratorResizingImages(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size):
+def createGeneratorResizingImages(inputs, image_paths, labels, region_paths, idx_file, patch_height, patch_width, batch_size):
     hstride, wstride = get_stride(patch_height, patch_width)
     
     gr_chunks = []
@@ -262,7 +261,7 @@ def createGeneratorResizingImages(inputs, image_paths, labels, region_paths, bac
 
     while (True):
         idx_file = np.random.randint(number_of_training_pages)
-        gr, gt = get_image_with_gt(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file)
+        gr, gt = get_image_with_gt(inputs, image_paths, labels, region_paths, idx_file)
         gr = resizeImage(gr, patch_height, patch_width)
 
         gr_chunks.append(gr)
@@ -280,14 +279,14 @@ def createGeneratorResizingImages(inputs, image_paths, labels, region_paths, bac
             count = 0
                 
 @threadsafe_generator  # Credit: https://anandology.com/blog/using-iterators-and-generators/
-def createGeneratorSequentialExtraction(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size):
+def createGeneratorSequentialExtraction(inputs, image_paths, labels, region_paths, idx_file, patch_height, patch_width, batch_size):
     
     hstride, wstride = get_stride(patch_height, patch_width)
     
     gr_chunks = []
     gt_chunks = []
 
-    gr, gt = get_image_with_gt(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file)
+    gr, gt = get_image_with_gt(inputs, image_paths, labels, region_paths, idx_file)
     count = 0
     for row in range(0, gr.shape[0] - patch_height, hstride):
         for col in range(0, gr.shape[1] - patch_width, wstride):
@@ -306,7 +305,7 @@ def createGeneratorSequentialExtraction(inputs, image_paths, labels, region_path
 
 
 @threadsafe_generator  # Credit: https://anandology.com/blog/using-iterators-and-generators/
-def createGeneratorDefault(inputs, image_paths, labels, region_paths, backgrounds_paths, patch_height, patch_width, batch_size, sample_extraction_mode):
+def createGeneratorDefault(inputs, image_paths, labels, region_paths, patch_height, patch_width, batch_size, sample_extraction_mode):
     print("Creating default generator...")
     
     number_of_training_pages = len(image_paths)
@@ -314,11 +313,11 @@ def createGeneratorDefault(inputs, image_paths, labels, region_paths, background
     while True:
         for idx_file in range(number_of_training_pages):
             if sample_extraction_mode == SampleExtractionMode.RANDOM:
-                yield extractRandomSamples(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size, sample_extraction_mode)
+                yield extractRandomSamples(inputs, image_paths, labels, region_paths, idx_file, patch_height, patch_width, batch_size, sample_extraction_mode)
             elif sample_extraction_mode == SampleExtractionMode.SEQUENTIAL:
-                yield createGeneratorSequentialExtraction(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size)
+                yield createGeneratorSequentialExtraction(inputs, image_paths, labels, region_paths, idx_file, patch_height, patch_width, batch_size)
             elif sample_extraction_mode == SampleExtractionMode.RESIZING:
-                yield createGeneratorResizingImages(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size)
+                yield createGeneratorResizingImages(inputs, image_paths, labels, region_paths, idx_file, patch_height, patch_width, batch_size)
             else:
                 raise Exception(
                     'The sample extraction mode does not exist.\n'
@@ -326,11 +325,9 @@ def createGeneratorDefault(inputs, image_paths, labels, region_paths, background
 
 
 @threadsafe_generator  # Credit: https://anandology.com/blog/using-iterators-and-generators/
-def createGeneratorShuffle(inputs, image_paths, labels, region_paths, backgrounds_paths, patch_height, patch_width, batch_size, sample_extraction_mode):
+def createGeneratorShuffle(inputs, image_paths, labels, region_paths, patch_height, patch_width, batch_size, sample_extraction_mode):
     print("Creating shuffle generator...")
     
-    image_paths, labels,
-
     list_shuffle_idx_files = list(range(len(image_paths)))
         
     while True:
@@ -338,18 +335,18 @@ def createGeneratorShuffle(inputs, image_paths, labels, region_paths, background
         
         for idx_file in list_shuffle_idx_files:
             if sample_extraction_mode == SampleExtractionMode.RANDOM:
-                yield extractRandomSamples(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size, sample_extraction_mode)
+                yield extractRandomSamples(inputs, image_paths, labels, region_paths, idx_file, patch_height, patch_width, batch_size, sample_extraction_mode)
             elif sample_extraction_mode == SampleExtractionMode.SEQUENTIAL:
-                yield createGeneratorSequentialExtraction(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size)
+                yield createGeneratorSequentialExtraction(inputs, image_paths, labels, region_paths, idx_file, patch_height, patch_width, batch_size)
             elif sample_extraction_mode == SampleExtractionMode.RESIZING:
-                yield createGeneratorResizingImages(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size)
+                yield createGeneratorResizingImages(inputs, image_paths, labels, region_paths, idx_file, patch_height, patch_width, batch_size)
             else:
                 raise Exception(
                     'The sample extraction mode does not exist.\n'
                 )
 
 @threadsafe_generator  # Credit: https://anandology.com/blog/using-iterators-and-generators/
-def createGeneratorRandom(inputs, image_paths, labels, region_paths, backgrounds_paths, patch_height, patch_width, batch_size, sample_extraction_mode):
+def createGeneratorRandom(inputs, image_paths, labels, region_paths, patch_height, patch_width, batch_size, sample_extraction_mode):
     print("Creating random generator...")
 
     number_of_training_pages = len(image_paths)
@@ -357,11 +354,11 @@ def createGeneratorRandom(inputs, image_paths, labels, region_paths, backgrounds
     while True:
         idx_file = np.random.randint(number_of_training_pages) 
         if sample_extraction_mode == SampleExtractionMode.RANDOM:
-            yield extractRandomSamples(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size, sample_extraction_mode)
+            yield extractRandomSamples(inputs, image_paths, labels, region_paths, idx_file, patch_height, patch_width, batch_size, sample_extraction_mode)
         elif sample_extraction_mode == SampleExtractionMode.SEQUENTIAL:
-            yield createGeneratorSequentialExtraction(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size)
+            yield createGeneratorSequentialExtraction(inputs, image_paths, labels, region_paths, idx_file, patch_height, patch_width, batch_size)
         elif sample_extraction_mode == SampleExtractionMode.RESIZING:
-            yield createGeneratorResizingImages(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size)
+            yield createGeneratorResizingImages(inputs, image_paths, labels, region_paths, idx_file, patch_height, patch_width, batch_size)
         else:
             raise Exception(
                 'The sample extraction mode does not exist.\n'
@@ -377,23 +374,21 @@ def createGenerator(inputs, patch_height, patch_width, batch_size, file_selectio
     if is_training: #For training
         image_paths = [img_path for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_IMAGES]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image >= int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
         region_paths = [img_path for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_SELECTED_REGIONS]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image >= int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
-        backgrounds_paths = [img_path for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_BACKGROUND_LAYER]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image >= int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
-        labels = [idx_dataset for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_BACKGROUND_LAYER]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image >= int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
+        labels = [idx_dataset for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_IMAGES]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image >= int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
 
     else: #For validation
         image_paths = [img_path for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_IMAGES]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image < int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
         region_paths = [img_path for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_SELECTED_REGIONS]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image < int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
-        backgrounds_paths = [img_path for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_BACKGROUND_LAYER]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image < int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
-        labels = [idx_dataset for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_BACKGROUND_LAYER]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image < int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
+        labels = [idx_dataset for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_IMAGES]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image < int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
 
     labels = np.eye(num_domains)[labels]
     
     if file_selection_mode == FileSelectionMode.DEFAULT:
-        return createGeneratorDefault(inputs, image_paths, labels, region_paths, backgrounds_paths, patch_height, patch_width, batch_size, sample_extraction_mode)
+        return createGeneratorDefault(inputs, image_paths, labels, region_paths, patch_height, patch_width, batch_size, sample_extraction_mode)
     elif file_selection_mode == FileSelectionMode.SHUFFLE:
-        return createGeneratorShuffle(inputs, image_paths, labels, region_paths, backgrounds_paths, patch_height, patch_width, batch_size, sample_extraction_mode)
+        return createGeneratorShuffle(inputs, image_paths, labels, region_paths, patch_height, patch_width, batch_size, sample_extraction_mode)
     elif file_selection_mode == FileSelectionMode.RANDOM:
-        return createGeneratorRandom(inputs, image_paths, labels, region_paths, backgrounds_paths, patch_height, patch_width, batch_size, sample_extraction_mode)
+        return createGeneratorRandom(inputs, image_paths, labels, region_paths, patch_height, patch_width, batch_size, sample_extraction_mode)
     else:
         raise Exception(
             'The file extraction mode does not exist.\n'
