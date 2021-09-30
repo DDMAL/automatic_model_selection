@@ -355,7 +355,7 @@ def createGeneratorRandom(inputs, image_paths, labels, region_paths, backgrounds
     number_of_training_pages = len(image_paths)
 
     while True:
-        idx_file = np.random.randint(number_of_training_pages)  # Changed len to grs from gr
+        idx_file = np.random.randint(number_of_training_pages) 
         if sample_extraction_mode == SampleExtractionMode.RANDOM:
             yield extractRandomSamples(inputs, image_paths, labels, region_paths, backgrounds_paths, idx_file, patch_height, patch_width, batch_size, sample_extraction_mode)
         elif sample_extraction_mode == SampleExtractionMode.SEQUENTIAL:
@@ -411,26 +411,29 @@ def getTrain(inputs, num_labels, patch_height, patch_width, batch_size, file_sel
 
 
 
-def get_number_samples_sequential(inputs, patch_height, patch_width):
+def get_number_samples_sequential(image_paths, patch_height, patch_width):
     hstride, wstride = get_stride(patch_height, patch_width)
     number_samples = 0
 
-    for idx_file in range(len(inputs["Image"])):
-        gr = cv2.imread(inputs["Image"][idx_file][KEY_RESOURCE_PATH], cv2.IMREAD_COLOR)  # 3-channel
+    for path_file in image_paths:
+        gr = cv2.imread(path_file, cv2.IMREAD_COLOR)  # 3-channel
         number_samples += ((gr.shape[0] - patch_height) // hstride) * ((gr.shape[1] - patch_width) // wstride)
 
     return number_samples
 
-def get_steps_per_epoch(inputs, number_samples_per_class, patch_height, patch_width, batch_size, sample_extraction_mode):
+def get_steps_per_epoch(inputs, number_samples_per_class, patch_height, patch_width, batch_size, sample_extraction_mode, is_training, val_ratio):
+
+    if is_training: #For training
+        image_paths = [img_path for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_IMAGES]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image >= int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
+    else: #For validation
+        image_paths = [img_path for idx_dataset, dict_imgs_folder in enumerate(inputs[KEY_IMAGES]) for idx_image, img_path in enumerate(dict_imgs_folder[KEY_RESOURCE_PATH]) if idx_image < int(np.ceil(len(dict_imgs_folder[KEY_RESOURCE_PATH])*val_ratio))]
 
     if sample_extraction_mode == SampleExtractionMode.RANDOM:
         return number_samples_per_class // batch_size
     elif sample_extraction_mode == SampleExtractionMode.SEQUENTIAL:
-        return get_number_samples_sequential(inputs, patch_height, patch_width)
+        return get_number_samples_sequential(image_paths, patch_height, patch_width)
     elif sample_extraction_mode == SampleExtractionMode.RESIZING:
-        image_paths = [img_path for dict_imgs_folder in inputs[KEY_IMAGES] for img_path in dict_imgs_folder[KEY_RESOURCE_PATH]]
-        #return len(image_paths) // batch_size
-        return number_samples_per_class // batch_size
+        return np.ceil(len(image_paths) / batch_size)
     else:
         raise Exception(
             'The sample extraction mode does not exist.\n'
@@ -451,10 +454,13 @@ def train_domain_classifier(
     batch_size=16,
 ):
 
+    val_file_selection_mode = FileSelectionMode.DEFAULT
+    val_sample_extraction_mode = SampleExtractionMode.RESIZING
+
     # Create ground_truth
     print("Creating data generators (training and validation)...")
     generator = getTrain(inputs, num_domains, height, width, batch_size, file_selection_mode, sample_extraction_mode, True, inputs[KEY_VALIDATION_RATIO])
-    generator_validation = getTrain(inputs, num_domains, height, width, batch_size, FileSelectionMode.DEFAULT, SampleExtractionMode.RESIZING, False, inputs[KEY_VALIDATION_RATIO])
+    generator_validation = getTrain(inputs, num_domains, height, width, batch_size, val_file_selection_mode, val_sample_extraction_mode, False, inputs[KEY_VALIDATION_RATIO])
 
     
     print("Training a new domain classification model")
@@ -472,15 +478,16 @@ def train_domain_classifier(
         EarlyStopping(monitor="val_accuracy", patience=3, verbose=0, mode="max"),
     ]
 
-    steps_per_epoch = get_steps_per_epoch(inputs, number_samples_per_class, height, width, batch_size, sample_extraction_mode)
+    steps_per_epoch_train = get_steps_per_epoch(inputs, number_samples_per_class, height, width, batch_size, sample_extraction_mode, True, inputs[KEY_VALIDATION_RATIO])
+    steps_per_epoch_val = get_steps_per_epoch(inputs, number_samples_per_class, height, width, batch_size, val_sample_extraction_mode, False, inputs[KEY_VALIDATION_RATIO])
 
     # Training stage
     model.fit(
         generator,
         verbose=2,
-        steps_per_epoch=steps_per_epoch,
+        steps_per_epoch=steps_per_epoch_train,
         validation_data=generator_validation,
-        validation_steps=100,
+        validation_steps=steps_per_epoch_val,
         callbacks=callbacks_list,
         epochs=epochs,
     )
