@@ -1,0 +1,19 @@
+{
+
+    "0": {
+        "name": "MS73",
+        "layers":{
+            "BG": "Models/Calvo/MS73/01-square-notation/02-three-pages-val-acc-20-epochs/models/back.hdf5",
+            "staff": "Models/Calvo/MS73/01-square-notation/02-three-pages-val-acc-20-epochs/models/staff.hdf5",
+            "neumes": "Models/Calvo/MS73/01-square-notation/02-three-pages-val-acc-20-epochs/models/music.hdf5"
+        }
+    },
+    "1": {
+        "name": "b59-850",
+        "layers":{
+            "BG": "Models/Calvo/01-square-notation/02-three-pages-val-acc-20-epochs/models/back.hdf5",
+            "staff": "Models/Calvo/01-square-notation/02-three-pages-val-acc-20-epochs/models/staff.hdf5",
+            "neumes": "Models/Calvo/01-square-notation/02-three-pages-val-acc-20-epochs/models/music.hdf5"
+        }
+    }
+}
