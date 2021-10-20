@@ -3,17 +3,20 @@
     "0": {
         "name": "MS73",
         "layers":{
-            "BG": "Models/Calvo/MS73/01-square-notation/02-three-pages-val-acc-20-epochs/models/back.hdf5",
-            "staff": "Models/Calvo/MS73/01-square-notation/02-three-pages-val-acc-20-epochs/models/staff.hdf5",
-            "neumes": "Models/Calvo/MS73/01-square-notation/02-three-pages-val-acc-20-epochs/models/music.hdf5"
-        }
+            "BG": "Models/Calvo/MS73_train_BG_w256_n100.h5",
+            "staff": "Models/Calvo/MS73_train_staff_w256_n100.h5",
+            "neumes": "Models/Calvo/MS73_train_neumes_w256_n100.h5"
+        },
+        "windows_shape": [256, 256]
     },
     "1": {
         "name": "b59-850",
         "layers":{
-            "BG": "Models/Calvo/01-square-notation/02-three-pages-val-acc-20-epochs/models/back.hdf5",
-            "staff": "Models/Calvo/01-square-notation/02-three-pages-val-acc-20-epochs/models/staff.hdf5",
-            "neumes": "Models/Calvo/01-square-notation/02-three-pages-val-acc-20-epochs/models/music.hdf5"
-        }
+            "BG": "Models/Calvo/b-59-850_train_BG_w256_n100.h5",
+            "staff": "Models/Calvo/b-59-850_train_staff_w256_n100.h5",
+            "neumes": "Models/Calvo/b-59-850_train_neumes_w256_n100.h5",
+            "text": "Models/Calvo/b-59-850_train_text_w256_n100.h5"
+        },
+        "windows_shape": [256, 256]
     }
 }

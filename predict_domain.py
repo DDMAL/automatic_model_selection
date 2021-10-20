@@ -181,6 +181,46 @@ def mkdirp(directory):
         os.makedirs(directory)
 
 
+def get_stride(patch_height, patch_width):
+    return patch_height // 2, patch_width // 2
+
+
+def predictBatch(batch_data_list, coords_batch, model, batch_size, margin, predicted_layer):
+    batch_data_array = np.array(batch_data_list)
+    sample_prediction = model.predict(batch_data_array, batch_size=batch_size)
+
+    for idx_batch in range(len(batch_data_list)):
+        (row_sample, col_sample) = coords_batch[idx_batch]
+        predicted_layer[row_sample+margin : row_sample + patch_height, col_sample+margin : col_sample + patch_width] = sample_prediction[idx_batch,margin:,margin:,0]
+
+    return predicted_layer
+        
+def extractLayer(image, model, patch_height, patch_width, batch_size=2, margin = 4):
+
+    predicted_layer = np.zeros((image.shape[0], image.shape[1]))
+    hstride, wstride = get_stride(patch_height, patch_width)
+    
+    sample_list = []
+    count = 0
+    coords_batch = []
+    for row in range(0, image.shape[0] - patch_height, hstride):
+        for col in range(0, image.shape[1] - patch_width, wstride):
+
+            row = min(row, image.shape[0] - patch_height - 1)
+            col = min(col, image.shape[1] - patch_width - 1)
+            coords_batch.append((row, col))
+            sample = image[row : row + patch_height, col : col + patch_width]
+            sample_list.append(sample) 
+
+            if len(sample_list) == batch_size:
+                predicted_layer = predictBatch(sample_list, coords_batch, model, batch_size, margin, predicted_layer)
+                coords_batch = []
+                sample_list = []
+
+    predicted_layer = predictBatch(sample_list, coords_batch, model, batch_size, margin, predicted_layer)
+
+    return predicted_layer
+
 #########################################################################
 
 config = menu()
@@ -209,14 +249,16 @@ grs = []
 for path_img in inputs[KEY_IMAGES]:
     print ('-'*40)
     print (path_img)
-    gr = (cv2.imread(path_img, cv2.IMREAD_COLOR)) / 255.  # 3-channel
 
-    gr_resized = resizeImage(gr, config.patch_height, config.patch_width)
+    gr = cv2.imread(path_img, cv2.IMREAD_COLOR)  # 3-channel
+    gr_normalized = gr / 255.
+
+    gr_resized = resizeImage(gr_normalized, config.patch_height, config.patch_width)
 
     grs.append(gr_resized) 
     grs = np.array(grs)
     
-    predictions = model.predict(grs, batch_size=config.batch_size, verbose=0)
+    predictions = model.predict(grs, batch_size=1, verbose=0)
     print (predictions)
 
     idx_domain = np.argmax(predictions[0])
@@ -238,13 +280,17 @@ for path_img in inputs[KEY_IMAGES]:
         mkdirp(os.path.dirname(path_result_out))
 
         sae_model = load_model(models_selected["layers"][layer])
-        sae_predictions = sae_model.predict(grs, batch_size=config.batch_size, verbose=0)
+
+        patch_height = models_selected["windows_shape"][0]
+        patch_width = models_selected["windows_shape"][1]
+
+        predicted_layer = extractLayer(gr, sae_model, patch_height, patch_width)
 
         print("Layer: " + layer + ": Saving probability map in " + path_prob_out)
         print("Layer: " + layer + ": Saving result in " + path_result_out)
 
-        cv2.imwrite(path_prob_out, sae_predictions[0]*255)
-        cv2.imwrite(path_result_out, (sae_predictions[0]>threshold)*255)
+        cv2.imwrite(path_prob_out, predicted_layer*255)
+        cv2.imwrite(path_result_out, (predicted_layer>threshold)*255)
 
     
     grs = []    
