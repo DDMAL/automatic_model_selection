@@ -251,7 +251,7 @@ for path_img in inputs[KEY_IMAGES]:
     print (path_img)
 
     gr = cv2.imread(path_img, cv2.IMREAD_COLOR)  # 3-channel
-    gr_normalized = gr / 255.
+    gr_normalized = (255. - gr) / 255.
 
     gr_resized = resizeImage(gr_normalized, config.patch_height, config.patch_width)
 
@@ -284,7 +284,7 @@ for path_img in inputs[KEY_IMAGES]:
         patch_height = models_selected["windows_shape"][0]
         patch_width = models_selected["windows_shape"][1]
 
-        predicted_layer = extractLayer(gr, sae_model, patch_height, patch_width)
+        predicted_layer = extractLayer(gr_normalized, sae_model, patch_height, patch_width)
 
         print("Layer: " + layer + ": Saving probability map in " + path_prob_out)
         print("Layer: " + layer + ": Saving result in " + path_result_out)
