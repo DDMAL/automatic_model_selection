@@ -187,7 +187,7 @@ def get_image_with_gt(inputs, image_paths, labels, region_paths, idx_file):
             "input images: " + str(number_of_training_pages) + " index acceded: " + str(idx_file)
         )
 
-    gr = (cv2.imread(image_paths[idx_file], cv2.IMREAD_COLOR)) / 255.  # 3-channel
+    gr = (255. - cv2.imread(image_paths[idx_file], cv2.IMREAD_COLOR)) / 255.  # 3-channel
     gt = labels[idx_file]
 
     return gr, gt
