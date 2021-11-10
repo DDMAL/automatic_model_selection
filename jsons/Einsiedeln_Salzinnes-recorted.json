@@ -1,0 +1,22 @@
+{
+    "0": {
+        "name": "Einsiedeln",
+        "layers":{
+            "BG": "Models/Calvo/OK/Einsiedeln_train_BG_w256_n1000.h5",
+            "staff": "Models/Calvo/OK/Einsiedeln_train_staff_w256_n1000.h5",
+            "neumes": "Models/Calvo/OK/Einsiedeln_train_neumes_w256_n1000.h5",
+            "text": "Models/Calvo/OK/Einsiedeln_train_text_w256_n1000.h5"
+        },
+        "windows_shape": [256, 256]
+    },
+    "1": {
+        "name": "Salzinnes-recorted",
+        "layers":{
+            "BG": "Models/Calvo/OK/Salzinnes-recorted_train_BG_w256_n1000.h5",
+            "staff": "Models/Calvo/OK/Salzinnes-recorted_train_staff_w256_n1000.h5",
+            "neumes": "Models/Calvo/OK/Salzinnes-recorted_train_neumes_w256_n1000.h5",
+            "text": "Models/Calvo/OK/Salzinnes-recorted_train_text_w256_n1000.h5"
+        },
+        "windows_shape": [256, 256]
+    }
+}

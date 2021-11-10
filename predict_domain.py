@@ -11,24 +11,16 @@ import training_engine_classifier as training
 import pdb
 import argparse
 import json
-from keras.models import load_model
+from tensorflow.keras.models import load_model
 
 
 # ===========================
 #       CONSTANTS
 # ===========================
-KEY_BACKGROUND_LAYER = "rgba PNG - Layer 0 (Background)"
-KEY_SELECTED_REGIONS = "rgba PNG - Selected regions"
-KEY_RESOURCE_PATH = "resource_path"
-KEY_LAYERS = "layers"
 KEY_IMAGES = "Image"
 
-
 kPATH_IMAGES_DEFAULT = "datasets/experiments/MS73/test/images"
-kPATH_REGION_MASKS_DEFAULT = "datasets/experiments/MS73/test/regions"
 kPATH_MODEL_DEFAULT = "Models/DomClass/MS73_cap.hdf5"
-kPATH_BACKGROUND_DEFAULT = "datasets/MS73/layers/background"
-kPATH_LAYERS_DEFAULT = ["datasets/MS73/layers/staff", "datasets/MS73/layers/neumes"]
 kPATH_OUTPUT_DEFAULT = "Results/MS73_cap"
 kBATCH_SIZE_DEFAULT = 8
 kPATCH_HEIGHT_DEFAULT = 256
@@ -113,9 +105,6 @@ def menu():
     args = parser.parse_args()
 
     args.path_src = args.path_src if args.path_src is not None else kPATH_IMAGES_DEFAULT
-    args.path_regions = args.path_regions if args.path_regions is not None else kPATH_REGION_MASKS_DEFAULT
-    args.path_bg = args.path_bg if args.path_bg is not None else kPATH_BACKGROUND_DEFAULT
-    args.path_layer = args.path_layer if args.path_layer is not None else kPATH_LAYERS_DEFAULT
     
     print('CONFIG:\n -', str(args).replace('Namespace(','').replace(')','').replace(', ', '\n - '))
 
@@ -145,9 +134,6 @@ def init_input_dictionary(config):
     inputs = {}
 
     inputs["Image"] = []
-    inputs[KEY_BACKGROUND_LAYER] = []
-    inputs[KEY_SELECTED_REGIONS] = []
-    inputs[KEY_LAYERS] = []
     list_src_files = list_files(config.path_src)
 
     parent_path_bg = config.path_bg
@@ -160,19 +146,6 @@ def init_input_dictionary(config):
         print (path_imgs)
         inputs[KEY_IMAGES].append(path_imgs)
 
-        path_bgs = os.path.join(parent_path_bg, os.path.basename(path_imgs))
-        inputs[KEY_BACKGROUND_LAYER].append(path_bgs)
-
-        path_regions = os.path.join(parent_path_regions, os.path.splitext(os.path.basename(path_imgs))[0] + ".png")
-        inputs[KEY_SELECTED_REGIONS].append(path_regions)
-
-
-        list_path_layers = []
-        for path_layer in config.path_layer:
-            path_layers = os.path.join(path_layer, os.path.basename(path_imgs))
-            list_path_layers.append(path_layers)
-        inputs[KEY_LAYERS].append(list_path_layers)
-    
     return inputs
 
 
@@ -217,7 +190,8 @@ def extractLayer(image, model, patch_height, patch_width, batch_size=2, margin =
                 coords_batch = []
                 sample_list = []
 
-    predicted_layer = predictBatch(sample_list, coords_batch, model, batch_size, margin, predicted_layer)
+    if len(sample_list) > 0:
+        predicted_layer = predictBatch(sample_list, coords_batch, model, batch_size, margin, predicted_layer)
 
     return predicted_layer
 
@@ -246,9 +220,20 @@ model = training.get_domain_classifier(num_domains=num_domains, height=config.pa
 
 
 grs = []
+
+summary_results = {}
+
+summary_results["models"] = data_models
+summary_results["domain_classifier"] = config.path_model_dom_classifier
+summary_results["test"] = []
+
+
 for path_img in inputs[KEY_IMAGES]:
     print ('-'*40)
     print (path_img)
+
+    summary_img = {}
+    summary_img["image"] = path_img
 
     gr = cv2.imread(path_img, cv2.IMREAD_COLOR)  # 3-channel
     gr_normalized = (255. - gr) / 255.
@@ -266,11 +251,21 @@ for path_img in inputs[KEY_IMAGES]:
     models_selected = data_models[str(idx_domain)]
     print("Selected domain: " + models_selected["name"] + " (label " + str(idx_domain) + ")")
 
+    summary_prediction = []
+    summary_prediction.append(int(idx_domain))
+    summary_prediction.append(models_selected["name"])
+
+    list_predictions_prob = []
+    for p in predictions[0]:
+        list_predictions_prob.append(str(p))
+    summary_prediction.append(list_predictions_prob)
+    summary_img["prediction"] = summary_prediction
+
     filename = os.path.basename(path_img)
 
     threshold = 0.5
     
-    
+    layer_predictions = []
     for layer in models_selected["layers"]:
 
         path_prob_out = os.path.join(config.path_out, layer, "probability", os.path.basename(path_img))
@@ -285,6 +280,7 @@ for path_img in inputs[KEY_IMAGES]:
         patch_width = models_selected["windows_shape"][1]
 
         predicted_layer = extractLayer(gr_normalized, sae_model, patch_height, patch_width)
+        layer_predictions.append(predicted_layer)
 
         print("Layer: " + layer + ": Saving probability map in " + path_prob_out)
         print("Layer: " + layer + ": Saving result in " + path_result_out)
@@ -292,11 +288,30 @@ for path_img in inputs[KEY_IMAGES]:
         cv2.imwrite(path_prob_out, predicted_layer*255)
         cv2.imwrite(path_result_out, (predicted_layer>threshold)*255)
 
+    arr_layer_predictions = np.array(layer_predictions)
+    argmax_layer_predictions = np.argmax(arr_layer_predictions, axis=0)
+
     
+    idx_layer = 0
+    for layer in models_selected["layers"]:
+        path_result_out = os.path.join(config.path_out, "combination", layer, "result", os.path.basename(path_img))
+        mkdirp(os.path.dirname(path_result_out))
+
+        predicted_layer = (argmax_layer_predictions == idx_layer)
+        cv2.imwrite(path_result_out, predicted_layer*255)
+        idx_layer+=1
+        
     grs = []    
+    summary_results["test"].append(summary_img)
     print ('-'*40)
 
 
+print (summary_results)
+
+path_results = os.path.join(config.path_out, "results.txt")
+
+with open(path_results, 'w') as f:
+    json.dump(summary_results, f, indent=2)
 
 print("Finishing the prediction job.")
 
