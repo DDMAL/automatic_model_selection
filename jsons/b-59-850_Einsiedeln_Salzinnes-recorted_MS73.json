@@ -6,6 +6,7 @@
             "staff": "Models/Calvo/OK/b-59-850_train_staff_w256_n1000.h5",
             "neumes": "Models/Calvo/OK/b-59-850_train_neumes_w256_n1000.h5"
         },
+        "training_folder":"datasets/experiments/b-59-850/training/images",
         "windows_shape": [256, 256]
     },
     "1": {
@@ -15,6 +16,7 @@
             "staff": "Models/Calvo/without_text/Einsiedeln_train_staff_w256_n1000.h5",
             "neumes": "Models/Calvo/without_text/Einsiedeln_train_neumes_w256_n1000.h5"
         },
+        "training_folder":"datasets/experiments/Einsiedeln/training/images",
         "windows_shape": [256, 256]
     },
     "2": {
@@ -24,6 +26,7 @@
             "staff": "Models/Calvo/without_text/Salzinnes-recorted_train_staff_w256_n1000.h5",
             "neumes": "Models/Calvo/without_text/Salzinnes-recorted_train_neumes_w256_n1000.h5"
         },
+        "training_folder":"datasets/experiments/Salzinnes-recorted/training/images",
         "windows_shape": [256, 256]
     },
     "3": {
@@ -33,6 +36,7 @@
             "staff": "Models/Calvo/without_text/MS73_train_staff_w256_n1000.h5",
             "neumes": "Models/Calvo/without_text/MS73_train_neumes_w256_n1000.h5"
         },
+        "training_folder":"datasets/experiments/MS73/training/images",
         "windows_shape": [256, 256]
     }
 }
